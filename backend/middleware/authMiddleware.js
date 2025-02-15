@@ -1,6 +1,5 @@
 const jwt = require("jsonwebtoken");
 
-// Middleware to authenticate users
 const authenticateJWT = (req, res, next) => {
   const token = req.header("Authorization");
 
@@ -19,7 +18,6 @@ const authenticateJWT = (req, res, next) => {
   }
 };
 
-// Middleware to check if user is an Admin
 const isAdmin = (req, res, next) => {
   if (!req.user || req.user.role !== "admin") {
     return res.status(403).json({ error: "Access denied. Admins only." });
@@ -27,7 +25,6 @@ const isAdmin = (req, res, next) => {
   next();
 };
 
-// Middleware to check if user is a Worker
 const isWorker = (req, res, next) => {
   if (!req.user || req.user.role !== "worker") {
     return res.status(403).json({ error: "Access denied. Workers only." });
