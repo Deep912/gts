@@ -27,7 +27,9 @@ const Login = () => {
 
         setTimeout(() => {
           window.location.href =
-            response.data.user.role === "admin" ? "/admin/" : "/worker/";
+            response.data.user.role === "admin"
+              ? "/admin/dashboard"
+              : "/worker/";
         }, 500);
       } else {
         message.error("Invalid credentials.");
