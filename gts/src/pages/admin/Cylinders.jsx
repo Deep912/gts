@@ -11,7 +11,12 @@ import {
   Switch,
 } from "antd";
 import axios from "axios";
-import { PlusOutlined, DeleteOutlined, UndoOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  EyeInvisibleOutlined,
+  SyncOutlined,
+} from "@ant-design/icons";
 
 const { Option } = Select;
 
@@ -19,13 +24,15 @@ const Cylinders = () => {
   const [cylinders, setCylinders] = useState([]);
   const [deletedCylinders, setDeletedCylinders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState(""); // Filter by status
-  const [showDeleted, setShowDeleted] = useState(false); // Toggle deleted cylinders
-  const [cylinderId, setCylinderId] = useState(""); // Auto-generated ID
+  const [statusFilter, setStatusFilter] = useState("");
+  const [showDeleted, setShowDeleted] = useState(false);
+
+  // 🔹 Modal States
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
+  const [cylinderId, setCylinderId] = useState("");
 
-  // 🔹 Fetch Cylinders
+  // 🔹 Fetch Active and Deleted Cylinders
   useEffect(() => {
     loadCylinders();
     loadDeletedCylinders();
@@ -42,7 +49,6 @@ const Cylinders = () => {
       .finally(() => setLoading(false));
   };
 
-  // 🔹 Fetch Deleted Cylinders
   const loadDeletedCylinders = () => {
     setLoading(true);
     axios
@@ -64,7 +70,6 @@ const Cylinders = () => {
         }
       );
       setCylinderId(response.data.new_id);
-      form.setFieldsValue({ serial_number: response.data.new_id }); // Set value in form
     } catch (error) {
       message.error("Error generating cylinder ID");
     }
@@ -85,6 +90,59 @@ const Cylinders = () => {
       .catch(() => message.error("Failed to add cylinder."));
   };
 
+  // 🔹 Delete Cylinder (Move to Deleted)
+  const handleDelete = (serial_number) => {
+    axios
+      .post(
+        "http://localhost:5000/admin/delete-cylinder",
+        { serial_number },
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      )
+      .then(() => {
+        message.success("Cylinder moved to deleted records.");
+        loadCylinders();
+        loadDeletedCylinders();
+      })
+      .catch(() => message.error("Failed to delete cylinder."));
+  };
+
+  // 🔹 Restore Deleted Cylinder
+  const handleRestore = (serial_number) => {
+    axios
+      .post(
+        "http://localhost:5000/admin/restore-cylinder",
+        { serial_number },
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      )
+      .then(() => {
+        message.success("Cylinder restored successfully.");
+        loadCylinders();
+        loadDeletedCylinders();
+      })
+      .catch(() => message.error("Failed to restore cylinder."));
+  };
+
+  // 🔹 Change Cylinder Status
+  const handleChangeStatus = (serial_number, status) => {
+    axios
+      .post(
+        "http://localhost:5000/admin/update-cylinder-status",
+        { serial_number, status },
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      )
+      .then(() => {
+        message.success("Cylinder status updated.");
+        loadCylinders();
+      })
+      .catch(() => message.error("Failed to update status."));
+  };
+
   return (
     <Card
       title="Cylinders Management"
@@ -98,6 +156,39 @@ const Cylinders = () => {
         </Button>
       }
     >
+      {/* Filter & Toggle Buttons */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 10,
+        }}
+      >
+        {!showDeleted && (
+          <Select
+            placeholder="Filter by status"
+            onChange={(value) => setStatusFilter(value)}
+            allowClear
+            style={{ width: 200 }}
+          >
+            <Option value="">All</Option>
+            <Option value="available">Available</Option>
+            <Option value="dispatched">Dispatched</Option>
+            <Option value="empty">Empty</Option>
+            <Option value="refilling">Refilling</Option>
+          </Select>
+        )}
+
+        <Switch
+          checked={showDeleted}
+          onChange={(checked) => setShowDeleted(checked)}
+          checkedChildren="Show Deleted"
+          unCheckedChildren="Show Active"
+          style={{ marginLeft: "auto" }}
+        />
+      </div>
+
       {/* Cylinders Table */}
       <Table
         dataSource={showDeleted ? deletedCylinders : cylinders}
@@ -119,11 +210,65 @@ const Cylinders = () => {
             dataIndex: "size",
             key: "size",
           },
-          {
-            title: "Status",
-            dataIndex: "status",
-            key: "status",
-          },
+          ...(showDeleted
+            ? [
+                {
+                  title: "Deleted By",
+                  dataIndex: "deleted_by",
+                  key: "deleted_by",
+                },
+                {
+                  title: "Deleted On",
+                  dataIndex: "deleted_at",
+                  key: "deleted_at",
+                },
+                {
+                  title: "Actions",
+                  key: "actions",
+                  render: (_, record) => (
+                    <Button
+                      icon={<SyncOutlined />}
+                      type="primary"
+                      onClick={() => handleRestore(record.serial_number)}
+                    >
+                      Restore
+                    </Button>
+                  ),
+                },
+              ]
+            : [
+                {
+                  title: "Status",
+                  dataIndex: "status",
+                  key: "status",
+                  render: (text, record) => (
+                    <Select
+                      value={text}
+                      onChange={(value) =>
+                        handleChangeStatus(record.serial_number, value)
+                      }
+                      style={{ width: 120 }}
+                    >
+                      <Option value="available">Available</Option>
+                      <Option value="dispatched">Dispatched</Option>
+                      <Option value="empty">Empty</Option>
+                      <Option value="refilling">Refilling</Option>
+                    </Select>
+                  ),
+                },
+                {
+                  title: "Actions",
+                  key: "actions",
+                  render: (_, record) => (
+                    <Button
+                      type="primary"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleDelete(record.serial_number)}
+                    />
+                  ),
+                },
+              ]),
         ]}
       />
 
@@ -135,16 +280,14 @@ const Cylinders = () => {
         footer={null}
       >
         <Form form={form} layout="vertical" onFinish={handleAddCylinder}>
-          {/* Cylinder ID */}
           <Form.Item
             label="Cylinder ID"
             name="serial_number"
             rules={[
-              { required: true, message: "Enter or generate Cylinder ID" },
+              { required: true, message: "Enter or generate a cylinder ID" },
             ]}
           >
             <Input
-              placeholder="Enter manually or click 'Generate ID'"
               value={cylinderId}
               onChange={(e) => setCylinderId(e.target.value)}
               addonAfter={
@@ -154,54 +297,6 @@ const Cylinders = () => {
               }
             />
           </Form.Item>
-
-          {/* Gas Type */}
-          <Form.Item
-            label="Gas Type"
-            name="gas_type"
-            rules={[{ required: true, message: "Select gas type" }]}
-          >
-            <Select placeholder="Select gas type">
-              <Option value="Oxygen">Oxygen</Option>
-              <Option value="Nitrogen">Nitrogen</Option>
-              <Option value="Chlorine">Chlorine</Option>
-            </Select>
-          </Form.Item>
-
-          {/* Size */}
-          <Form.Item
-            label="Size (L)"
-            name="size"
-            rules={[{ required: true, message: "Select a valid size" }]}
-          >
-            <Select placeholder="Select size">
-              {[10, 20, 30, 50, 100].map((size) => (
-                <Option key={size} value={size}>
-                  {size}L
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          {/* Status */}
-          <Form.Item
-            label="Status"
-            name="status"
-            initialValue="available"
-            rules={[{ required: true, message: "Select status" }]}
-          >
-            <Select>
-              <Option value="available">Available</Option>
-              <Option value="dispatched">Dispatched</Option>
-              <Option value="empty">Empty</Option>
-              <Option value="refilling">Refilling</Option>
-            </Select>
-          </Form.Item>
-
-          {/* Submit Button */}
-          <Button type="primary" htmlType="submit">
-            Add Cylinder
-          </Button>
         </Form>
       </Modal>
     </Card>
