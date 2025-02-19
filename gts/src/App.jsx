@@ -7,7 +7,6 @@ import {
 import Login from "./pages/Login";
 import AdminLayout from "./components/AdminLayout";
 import WorkerLayout from "./components/WorkerLayout";
-import Dashboard from "./pages/admin/Dashboard";
 import Cylinders from "./pages/admin/Cylinders";
 import Companies from "./pages/admin/Companies";
 import Reports from "./pages/admin/Reports";
@@ -28,7 +27,6 @@ const App = () => {
         {/* Admin Routes (Protected) */}
         {role === "admin" ? (
           <Route path="/admin/*" element={<AdminLayout />}>
-            <Route path="dashboard" element={<Dashboard />} />
             <Route path="cylinders" element={<Cylinders />} />
             <Route path="companies" element={<Companies />} />
             <Route path="reports" element={<Reports />} />

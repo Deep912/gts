@@ -34,40 +34,55 @@ const AdminLayout = () => {
   const [transactions, setTransactions] = useState([]);
   const [trends, setTrends] = useState([]);
   const [topCompanies, setTopCompanies] = useState([]);
+  const [cylinderStats, setCylinderStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 🔹 Fetch Admin Dashboard Data (All APIs in One Call)
+  // 🔹 Fetch All Admin Dashboard Data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, transactionsRes, trendsRes, topCompaniesRes] =
-          await Promise.all([
-            axios.get("http://localhost:5000/admin/stats", {
+        const [
+          statsRes,
+          transactionsRes,
+          trendsRes,
+          topCompaniesRes,
+          cylinderStatsRes,
+        ] = await Promise.all([
+          axios.get("http://localhost:5000/admin/stats", {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }),
+          axios.get("http://localhost:5000/admin/transactions", {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }),
+          axios.get("http://localhost:5000/admin/trends", {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }),
+          axios.get("http://localhost:5000/admin/top-companies", {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }),
+          axios.get(
+            "http://localhost:5000/admin/reports/cylinder-movement-summary",
+            {
               headers: {
                 Authorization: `Bearer ${localStorage.getItem("token")}`,
               },
-            }),
-            axios.get("http://localhost:5000/admin/transactions", {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem("token")}`,
-              },
-            }),
-            axios.get("http://localhost:5000/admin/trends", {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem("token")}`,
-              },
-            }),
-            axios.get("http://localhost:5000/admin/top-companies", {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem("token")}`,
-              },
-            }),
-          ]);
+            }
+          ),
+        ]);
 
         setStats(statsRes.data);
         setTransactions(transactionsRes.data);
         setTrends(trendsRes.data);
         setTopCompanies(topCompaniesRes.data);
+        setCylinderStats(cylinderStatsRes.data);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
       } finally {
@@ -157,64 +172,44 @@ const AdminLayout = () => {
                 </Col>
                 <Col xs={24} sm={12} md={6}>
                   <Card className="admin-stat-card">
-                    <Title level={4}>In Inventory</Title>
+                    <Title level={4}>Total Transactions</Title>
                     <Text strong>
-                      {loading ? <Spin /> : stats?.inventory_cylinders || 0}
+                      {loading ? (
+                        <Spin />
+                      ) : (
+                        cylinderStats?.total_transactions || 0
+                      )}
                     </Text>
                   </Card>
                 </Col>
                 <Col xs={24} sm={12} md={6}>
                   <Card className="admin-stat-card">
-                    <Title level={4}>Dispatched</Title>
+                    <Title level={4}>Unique Cylinders Moved</Title>
                     <Text strong>
-                      {loading ? <Spin /> : stats?.total_dispatched || 0}
+                      {loading ? (
+                        <Spin />
+                      ) : (
+                        cylinderStats?.unique_cylinders || 0
+                      )}
                     </Text>
                   </Card>
                 </Col>
               </Row>
 
-              {/* Additional Stats */}
-              <Row
-                gutter={[16, 16]}
-                justify="center"
-                style={{ marginBottom: "20px" }}
-              >
-                <Col xs={24} sm={12} md={6}>
-                  <Card className="admin-stat-card">
-                    <Title level={4}>Refilled Cylinders</Title>
-                    <Text strong>
-                      {loading ? <Spin /> : stats?.total_refilled || 0}
-                    </Text>
-                  </Card>
-                </Col>
-                <Col xs={24} sm={12} md={6}>
-                  <Card className="admin-stat-card">
-                    <Title level={4}>Currently Refilling</Title>
-                    <Text strong>
-                      {loading ? <Spin /> : stats?.refilling_cylinders || 0}
-                    </Text>
-                  </Card>
-                </Col>
-              </Row>
-
-              {/* Trends (Refill & Dispatch) */}
-              <Card className="trends-card">
-                <Title level={4}>Refill & Dispatch Trends (Last 7 Days)</Title>
+              {/* Top Cylinder Actions */}
+              <Card className="cylinder-actions-card">
+                <Title level={4}>Top Cylinder Actions</Title>
                 {loading ? (
                   <Spin />
                 ) : (
                   <List
                     itemLayout="horizontal"
-                    dataSource={trends}
+                    dataSource={cylinderStats?.top_actions || []}
                     renderItem={(item) => (
                       <List.Item>
                         <List.Item.Meta
-                          title={
-                            <Text strong>
-                              {new Date(item.date).toDateString()}
-                            </Text>
-                          }
-                          description={`Refilled: ${item.refilled} | Dispatched: ${item.dispatched}`}
+                          title={<Text strong>{item.action}</Text>}
+                          description={`Total: ${item.count}`}
                         />
                       </List.Item>
                     )}
@@ -222,20 +217,20 @@ const AdminLayout = () => {
                 )}
               </Card>
 
-              {/* Top Companies by Transactions */}
+              {/* Most Active Companies */}
               <Card className="top-companies-card">
-                <Title level={4}>Top 5 Companies by Transactions</Title>
+                <Title level={4}>Most Active Companies</Title>
                 {loading ? (
                   <Spin />
                 ) : (
                   <List
                     itemLayout="horizontal"
-                    dataSource={topCompanies}
+                    dataSource={cylinderStats?.top_companies || []}
                     renderItem={(item) => (
                       <List.Item>
                         <List.Item.Meta
                           title={<Text strong>{item.company_name}</Text>}
-                          description={`Total Transactions: ${item.total_transactions}`}
+                          description={`Transactions: ${item.count}`}
                         />
                       </List.Item>
                     )}
@@ -245,23 +240,22 @@ const AdminLayout = () => {
 
               {/* Recent Transactions */}
               <Card className="recent-transactions-card">
-                <Title level={4}>Recent Transactions</Title>
+                <Title level={4}>Recent Cylinder Transactions</Title>
                 {loading ? (
                   <Spin />
                 ) : (
                   <List
                     itemLayout="horizontal"
-                    dataSource={transactions}
+                    dataSource={transactions.slice(0, 10)} // Limit to 10 transactions
                     renderItem={(item) => (
                       <List.Item>
                         <List.Item.Meta
-                          title={
-                            <Text strong>
-                              {item.action.charAt(0).toUpperCase() +
-                                item.action.slice(1)}
-                            </Text>
-                          }
-                          description={`Cylinder: ${item.serial_number} | Company: ${item.company_name}`}
+                          title={<Text strong>{item.action}</Text>}
+                          description={`Cylinder: ${
+                            item.serial_number
+                          } | Date: ${new Date(
+                            item.timestamp
+                          ).toLocaleString()}`}
                         />
                       </List.Item>
                     )}
