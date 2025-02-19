@@ -60,38 +60,9 @@ const Cylinders = () => {
       .finally(() => setLoading(false));
   };
 
-  // 🔹 Generate Cylinder ID
-  const generateCylinderId = async () => {
-    try {
-      const response = await axios.get(
-        "http://localhost:5000/admin/generate-cylinder-id",
-        {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        }
-      );
-      setCylinderId(response.data.new_id);
-    } catch (error) {
-      message.error("Error generating cylinder ID");
-    }
-  };
-
-  // 🔹 Add Cylinder
-  const handleAddCylinder = (values) => {
-    axios
-      .post("http://localhost:5000/admin/add-cylinder", values, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      })
-      .then(() => {
-        message.success("Cylinder added successfully!");
-        setIsModalVisible(false);
-        form.resetFields();
-        loadCylinders();
-      })
-      .catch(() => message.error("Failed to add cylinder."));
-  };
-
-  // 🔹 Delete Cylinder (Move to Deleted)
   const handleDelete = (serial_number) => {
+    console.log("Deleting Cylinder:", serial_number); // Debugging
+
     axios
       .post(
         "http://localhost:5000/admin/delete-cylinder",
@@ -102,14 +73,18 @@ const Cylinders = () => {
       )
       .then(() => {
         message.success("Cylinder moved to deleted records.");
-        loadCylinders();
-        loadDeletedCylinders();
+        loadCylinders(); // Refresh active cylinders
+        loadDeletedCylinders(); // Refresh deleted cylinders
       })
-      .catch(() => message.error("Failed to delete cylinder."));
+      .catch((error) => {
+        console.error("Failed to delete cylinder:", error.response?.data);
+        message.error("Failed to delete cylinder.");
+      });
   };
 
-  // 🔹 Restore Deleted Cylinder
   const handleRestore = (serial_number) => {
+    console.log("Restoring Cylinder:", serial_number); // Debugging log
+
     axios
       .post(
         "http://localhost:5000/admin/restore-cylinder",
@@ -120,14 +95,17 @@ const Cylinders = () => {
       )
       .then(() => {
         message.success("Cylinder restored successfully.");
-        loadCylinders();
-        loadDeletedCylinders();
+        loadCylinders(); // Refresh active cylinders
+        loadDeletedCylinders(); // Refresh deleted cylinders
       })
-      .catch(() => message.error("Failed to restore cylinder."));
+      .catch((error) => {
+        console.error("Failed to restore cylinder:", error.response?.data);
+        message.error("Failed to restore cylinder.");
+      });
   };
-
-  // 🔹 Change Cylinder Status
   const handleChangeStatus = (serial_number, status) => {
+    console.log(`Updating status for ${serial_number} to ${status}`); // Debugging
+
     axios
       .post(
         "http://localhost:5000/admin/update-cylinder-status",
@@ -138,9 +116,48 @@ const Cylinders = () => {
       )
       .then(() => {
         message.success("Cylinder status updated.");
+        loadCylinders(); // Refresh the list after update
+      })
+      .catch((error) => {
+        console.error("Failed to update status:", error.response?.data);
+        message.error("Failed to update status.");
+      });
+  };
+
+  // 🔹 Generate Cylinder ID
+  const generateCylinderId = async () => {
+    try {
+      const response = await axios.get(
+        "http://localhost:5000/admin/generate-cylinder-id",
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      );
+      setCylinderId(response.data.new_id);
+      form.setFieldsValue({ serial_number: response.data.new_id }); // ✅ Set form value
+    } catch (error) {
+      message.error("Error generating cylinder ID");
+    }
+  };
+
+  // 🔹 Add Cylinder
+  const handleAddCylinder = (values) => {
+    console.log("Submitting Cylinder:", values); // ✅ Debugging log
+
+    axios
+      .post("http://localhost:5000/admin/add-cylinder", values, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      })
+      .then(() => {
+        message.success("Cylinder added successfully!");
+        setIsModalVisible(false);
+        form.resetFields();
         loadCylinders();
       })
-      .catch(() => message.error("Failed to update status."));
+      .catch((error) => {
+        console.error("Failed to add cylinder:", error.response?.data);
+        message.error("Failed to add cylinder.");
+      });
   };
 
   return (
@@ -280,6 +297,7 @@ const Cylinders = () => {
         footer={null}
       >
         <Form form={form} layout="vertical" onFinish={handleAddCylinder}>
+          {/* Cylinder ID */}
           <Form.Item
             label="Cylinder ID"
             name="serial_number"
@@ -289,13 +307,54 @@ const Cylinders = () => {
           >
             <Input
               value={cylinderId}
-              onChange={(e) => setCylinderId(e.target.value)}
+              onChange={(e) => {
+                setCylinderId(e.target.value);
+                form.setFieldsValue({ serial_number: e.target.value });
+              }}
               addonAfter={
                 <Button type="primary" onClick={generateCylinderId}>
                   Generate ID
                 </Button>
               }
             />
+          </Form.Item>
+
+          {/* Gas Type */}
+          <Form.Item
+            label="Gas Type"
+            name="gas_type"
+            rules={[{ required: true }]}
+          >
+            <Select>
+              <Option value="oxygen">Oxygen</Option>
+              <Option value="propane">Propane</Option>
+              <Option value="helium">Helium</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item label="Status" name="status" rules={[{ required: true }]}>
+            <Select>
+              <Option value="available">Available</Option>
+              <Option value="empty">Empty</Option>
+              <Option value="refilling">Refilling</Option>
+            </Select>
+          </Form.Item>
+
+          {/* Size */}
+          <Form.Item label="Size (L)" name="size" rules={[{ required: true }]}>
+            <Select>
+              <Option value={10}>10L</Option>
+              <Option value={20}>20L</Option>
+              <Option value={30}>30L</Option>
+              <Option value={50}>50L</Option>
+              <Option value={100}>100L</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item>
+            <Button type="primary" htmlType="submit">
+              Add Cylinder
+            </Button>
           </Form.Item>
         </Form>
       </Modal>

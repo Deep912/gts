@@ -649,11 +649,15 @@ app.get("/admin/generate-cylinder-id", authenticateJWT, async (req, res) => {
       return res.status(403).json({ error: "Access denied" });
     }
 
-    // Get the highest cylinder ID using numerical sorting
+    // 🔹 Get the highest cylinder ID from BOTH `cylinders` and `deleted_cylinders`
     const query = `
-      SELECT serial_number 
-      FROM cylinders 
-      WHERE serial_number ~ '^CYL[0-9]+$' -- Ensures correct format
+      SELECT serial_number FROM (
+        SELECT serial_number FROM cylinders 
+        WHERE serial_number ~ '^CYL[0-9]+$'
+        UNION ALL
+        SELECT serial_number FROM deleted_cylinders
+        WHERE serial_number ~ '^CYL[0-9]+$'
+      ) AS combined
       ORDER BY CAST(SUBSTRING(serial_number FROM 4) AS INTEGER) DESC 
       LIMIT 1;
     `;
@@ -663,7 +667,6 @@ app.get("/admin/generate-cylinder-id", authenticateJWT, async (req, res) => {
     let newId = "CYL1001"; // Default starting ID if no cylinders exist
 
     if (result.rows.length > 0) {
-      // Extract the numeric part of the last ID and increment it
       const lastId = result.rows[0].serial_number;
       const lastNumber = parseInt(lastId.replace("CYL", ""), 10);
       newId = `CYL${lastNumber + 1}`;
@@ -672,6 +675,80 @@ app.get("/admin/generate-cylinder-id", authenticateJWT, async (req, res) => {
     res.json({ new_id: newId });
   } catch (error) {
     console.error("Error generating cylinder ID:", error);
+    res.status(500).json({ error: "Database error", details: error.message });
+  }
+});
+
+app.post("/admin/restore-cylinder", authenticateJWT, async (req, res) => {
+  const { serial_number } = req.body;
+
+  if (!serial_number) {
+    return res
+      .status(400)
+      .json({ error: "Cylinder serial number is required." });
+  }
+
+  try {
+    // 🔹 1️⃣ Check if the cylinder exists in `deleted_cylinders`
+    const cylinderCheck = await pool.query(
+      "SELECT * FROM deleted_cylinders WHERE serial_number = $1",
+      [serial_number]
+    );
+
+    if (cylinderCheck.rows.length === 0) {
+      return res
+        .status(404)
+        .json({ error: "Cylinder not found in deleted records." });
+    }
+
+    const cylinder = cylinderCheck.rows[0];
+
+    // 🔹 2️⃣ Move the cylinder back to `cylinders`
+    await pool.query(
+      `INSERT INTO cylinders (serial_number, gas_type, size, status)
+       VALUES ($1, $2, $3, $4)`,
+      [
+        cylinder.serial_number,
+        cylinder.gas_type,
+        cylinder.size,
+        cylinder.status,
+      ]
+    );
+
+    // 🔹 3️⃣ Remove the cylinder from `deleted_cylinders`
+    await pool.query("DELETE FROM deleted_cylinders WHERE serial_number = $1", [
+      serial_number,
+    ]);
+
+    res.json({ message: "Cylinder restored successfully." });
+  } catch (error) {
+    console.error("Restore Cylinder Error:", error);
+    res.status(500).json({ error: "Database error", details: error.message });
+  }
+});
+
+app.post("/admin/update-cylinder-status", authenticateJWT, async (req, res) => {
+  const { serial_number, status } = req.body;
+
+  if (!serial_number || !status) {
+    return res
+      .status(400)
+      .json({ error: "Cylinder serial number and status are required." });
+  }
+
+  try {
+    const result = await pool.query(
+      "UPDATE cylinders SET status = $1 WHERE serial_number = $2 RETURNING *",
+      [status, serial_number]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Cylinder not found." });
+    }
+
+    res.json({ message: "Cylinder status updated successfully." });
+  } catch (error) {
+    console.error("Update Cylinder Status Error:", error);
     res.status(500).json({ error: "Database error", details: error.message });
   }
 });
@@ -808,12 +885,10 @@ app.get("/admin/deleted-companies", authenticateJWT, async (req, res) => {
 });
 
 // 🔹 Recover Deleted Company
-// 🔹 Restore Deleted Company
 app.post("/admin/recover-company", authenticateJWT, async (req, res) => {
   const { id } = req.body;
 
   try {
-    // Get the deleted company details from archived_companies
     const deletedCompany = await pool.query(
       "SELECT * FROM archived_companies WHERE id = $1",
       [id]
@@ -825,18 +900,20 @@ app.post("/admin/recover-company", authenticateJWT, async (req, res) => {
         .json({ error: "Company not found in deleted records" });
     }
 
-    // Insert it back into the companies table
     const { name, address, contact } = deletedCompany.rows[0];
 
-    await pool.query(
-      "INSERT INTO companies (id, name, address, contact) VALUES ($1, $2, $3, $4)",
-      [id, name, address, contact]
+    // ✅ Let PostgreSQL generate a NEW unique ID
+    const newCompany = await pool.query(
+      "INSERT INTO companies (name, address, contact) VALUES ($1, $2, $3) RETURNING id",
+      [name, address, contact]
     );
 
-    // Remove from archived_companies
     await pool.query("DELETE FROM archived_companies WHERE id = $1", [id]);
 
-    res.status(200).json({ success: "Company restored successfully" });
+    res.json({
+      message: "Company restored successfully!",
+      new_id: newCompany.rows[0].id,
+    });
   } catch (error) {
     console.error("❌ Restore Company Error:", error);
     res.status(500).json({ error: "Database error", details: error.message });
