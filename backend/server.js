@@ -12,7 +12,9 @@ app.use(express.json());
 app.use(
   cors({
     credentials: true,
-    origin: ["http://localhost:3000", "http://localhost:5173"],
+    origin: "*", // Allow all devices (for testing)
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
@@ -920,6 +922,101 @@ app.post("/admin/recover-company", authenticateJWT, async (req, res) => {
   }
 });
 
+//reports
+//reports
+
+app.get(
+  "/admin/reports/cylinder-movement",
+  authenticateJWT,
+  async (req, res) => {
+    try {
+      let { start, end, search, sortBy, sortOrder } = req.query;
+
+      let query = `
+      SELECT 
+        t.cylinder_id, 
+        t.action, 
+        u.username AS performed_by, 
+        t.timestamp
+      FROM transactions t
+      JOIN users u ON t.user_id = u.id
+      WHERE 1 = 1
+    `;
+
+      let values = [];
+
+      // 🔹 Date filter
+      if (start && end) {
+        query += ` AND t.timestamp BETWEEN $${values.length + 1} AND $${
+          values.length + 2
+        }`;
+        values.push(start, end);
+      }
+
+      // 🔹 Search filter (filtering by cylinder ID or action type)
+      if (search) {
+        query += ` AND (
+        CAST(t.cylinder_id AS TEXT) LIKE $${values.length + 1}
+        OR LOWER(t.action) LIKE LOWER($${values.length + 1})
+      )`;
+        values.push(`%${search}%`);
+      }
+
+      // 🔹 Sorting logic
+      if (sortBy && ["cylinder_id", "timestamp", "action"].includes(sortBy)) {
+        query += ` ORDER BY ${sortBy} ${sortOrder === "desc" ? "DESC" : "ASC"}`;
+      } else {
+        query += ` ORDER BY t.timestamp DESC`; // Default sorting by latest
+      }
+
+      const result = await pool.query(query, values);
+      res.json(result.rows);
+    } catch (error) {
+      console.error("❌ Cylinder Movement Report Error:", error);
+      res.status(500).json({ error: "Database error", details: error.message });
+    }
+  }
+);
+app.get(
+  "/admin/reports/cylinder-movement-summary",
+  authenticateJWT,
+  async (req, res) => {
+    try {
+      // Fetch summary data
+      const summaryQuery = `
+      SELECT 
+        COUNT(*) AS total_transactions, 
+        COUNT(DISTINCT cylinder_id) AS unique_cylinders, 
+        MAX(timestamp) AS latest_activity
+      FROM transactions;
+    `;
+
+      const actionBreakdownQuery = `
+      SELECT action, COUNT(*) AS count 
+      FROM transactions 
+      GROUP BY action 
+      ORDER BY count DESC;
+    `;
+
+      // Execute queries
+      const summaryResult = await pool.query(summaryQuery);
+      const actionBreakdownResult = await pool.query(actionBreakdownQuery);
+
+      res.json({
+        total_transactions: summaryResult.rows[0].total_transactions,
+        unique_cylinders: summaryResult.rows[0].unique_cylinders,
+        latest_activity: summaryResult.rows[0].latest_activity,
+        action_breakdown: actionBreakdownResult.rows,
+      });
+    } catch (error) {
+      console.error("❌ Cylinder Movement Summary Error:", error);
+      res.status(500).json({ error: "Database error", details: error.message });
+    }
+  }
+);
+
 // Start the server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`🚀 Server running on port ${PORT}`)
+);

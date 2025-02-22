@@ -3,12 +3,12 @@ import {
   Layout,
   Menu,
   Button,
-  Card,
   Row,
   Col,
+  Card,
   Typography,
-  Spin,
   List,
+  Spin,
 } from "antd";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
@@ -18,6 +18,7 @@ import {
   BarChartOutlined,
   LogoutOutlined,
   UserOutlined,
+  MenuOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
 import "../styles/AdminLayout.css";
@@ -30,58 +31,60 @@ const AdminLayout = () => {
   const location = useLocation();
   const username = localStorage.getItem("username") || "Admin";
 
+  // Sidebar state for mobile
+  const [collapsed, setCollapsed] = useState(window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [stats, setStats] = useState(null);
   const [transactions, setTransactions] = useState([]);
-  const [trends, setTrends] = useState([]);
-  const [topCompanies, setTopCompanies] = useState([]);
   const [cylinderStats, setCylinderStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 🔹 Fetch All Admin Dashboard Data
+  // Handle sidebar toggle
+  const toggleSidebar = () => {
+    setCollapsed(!collapsed);
+  };
+
+  // Resize listener to adjust layout on different screen sizes
+  useEffect(() => {
+    const handleResize = () => {
+      const mobileView = window.innerWidth < 768;
+      setIsMobile(mobileView);
+      if (!mobileView) setCollapsed(false);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Fetch dashboard data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [
-          statsRes,
-          transactionsRes,
-          trendsRes,
-          topCompaniesRes,
-          cylinderStatsRes,
-        ] = await Promise.all([
-          axios.get("http://localhost:5000/admin/stats", {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }),
-          axios.get("http://localhost:5000/admin/transactions", {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }),
-          axios.get("http://localhost:5000/admin/trends", {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }),
-          axios.get("http://localhost:5000/admin/top-companies", {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }),
-          axios.get(
-            "http://localhost:5000/admin/reports/cylinder-movement-summary",
-            {
+        const [statsRes, transactionsRes, cylinderStatsRes] = await Promise.all(
+          [
+            axios.get("http://localhost:5000/admin/stats", {
               headers: {
                 Authorization: `Bearer ${localStorage.getItem("token")}`,
               },
-            }
-          ),
-        ]);
+            }),
+            axios.get("http://localhost:5000/admin/transactions", {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+              },
+            }),
+            axios.get(
+              "http://localhost:5000/admin/reports/cylinder-movement-summary",
+              {
+                headers: {
+                  Authorization: `Bearer ${localStorage.getItem("token")}`,
+                },
+              }
+            ),
+          ]
+        );
 
         setStats(statsRes.data);
         setTransactions(transactionsRes.data);
-        setTrends(trendsRes.data);
-        setTopCompanies(topCompaniesRes.data);
         setCylinderStats(cylinderStatsRes.data);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
@@ -93,6 +96,13 @@ const AdminLayout = () => {
     fetchData();
   }, []);
 
+  // Handle menu clicks (auto-collapse sidebar on mobile)
+  const handleMenuClick = ({ key }) => {
+    navigate(key);
+    if (isMobile) setCollapsed(true);
+  };
+
+  // Logout function
   const handleLogout = () => {
     localStorage.clear();
     navigate("/", { replace: true });
@@ -102,36 +112,39 @@ const AdminLayout = () => {
   return (
     <Layout style={{ minHeight: "100vh" }}>
       {/* Sidebar */}
-      <Sider collapsible className="admin-sidebar">
+      <Sider
+        collapsible
+        collapsed={collapsed}
+        collapsedWidth={isMobile ? 0 : 80}
+        className="admin-sidebar"
+        breakpoint="md"
+      >
         <div className="admin-logo">🛠️ Admin Panel</div>
         <Menu
           theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
+          onClick={handleMenuClick}
           items={[
             {
               key: "/admin/dashboard",
               icon: <DashboardOutlined />,
               label: "Dashboard",
-              onClick: () => navigate("/admin/dashboard"),
             },
             {
               key: "/admin/cylinders",
               icon: <DatabaseOutlined />,
               label: "Cylinders",
-              onClick: () => navigate("/admin/cylinders"),
             },
             {
               key: "/admin/companies",
               icon: <ApartmentOutlined />,
               label: "Companies",
-              onClick: () => navigate("/admin/companies"),
             },
             {
               key: "/admin/reports",
               icon: <BarChartOutlined />,
               label: "Reports",
-              onClick: () => navigate("/admin/reports"),
             },
           ]}
         />
@@ -141,6 +154,22 @@ const AdminLayout = () => {
       <Layout>
         <Header className="admin-header">
           <div className="header-left">
+            {/* Show hamburger button in mobile mode */}
+            {isMobile && (
+              <Button
+                type="text"
+                icon={<MenuOutlined />}
+                onClick={toggleSidebar}
+                style={{
+                  fontSize: "18px",
+                  marginRight: "10px",
+                  backgroundColor: "white",
+                  border: "1px solid #ccc",
+                  padding: "5px 10px",
+                  borderRadius: "5px",
+                }}
+              />
+            )}
             <UserOutlined /> <span>Welcome, {username}</span>
           </div>
           <Button
@@ -196,48 +225,6 @@ const AdminLayout = () => {
                 </Col>
               </Row>
 
-              {/* Top Cylinder Actions */}
-              <Card className="cylinder-actions-card">
-                <Title level={4}>Top Cylinder Actions</Title>
-                {loading ? (
-                  <Spin />
-                ) : (
-                  <List
-                    itemLayout="horizontal"
-                    dataSource={cylinderStats?.top_actions || []}
-                    renderItem={(item) => (
-                      <List.Item>
-                        <List.Item.Meta
-                          title={<Text strong>{item.action}</Text>}
-                          description={`Total: ${item.count}`}
-                        />
-                      </List.Item>
-                    )}
-                  />
-                )}
-              </Card>
-
-              {/* Most Active Companies */}
-              <Card className="top-companies-card">
-                <Title level={4}>Most Active Companies</Title>
-                {loading ? (
-                  <Spin />
-                ) : (
-                  <List
-                    itemLayout="horizontal"
-                    dataSource={cylinderStats?.top_companies || []}
-                    renderItem={(item) => (
-                      <List.Item>
-                        <List.Item.Meta
-                          title={<Text strong>{item.company_name}</Text>}
-                          description={`Transactions: ${item.count}`}
-                        />
-                      </List.Item>
-                    )}
-                  />
-                )}
-              </Card>
-
               {/* Recent Transactions */}
               <Card className="recent-transactions-card">
                 <Title level={4}>Recent Cylinder Transactions</Title>
@@ -246,7 +233,7 @@ const AdminLayout = () => {
                 ) : (
                   <List
                     itemLayout="horizontal"
-                    dataSource={transactions.slice(0, 10)} // Limit to 10 transactions
+                    dataSource={transactions.slice(0, 10)}
                     renderItem={(item) => (
                       <List.Item>
                         <List.Item.Meta

@@ -71,3 +71,23 @@
     }
   }
   
+
+
+/* Ensure the correct white toggle button is visible */
+.menu-toggle-button {
+  font-size: 18px;
+  margin-right: 10px;
+  background-color: white;
+  border: 1px solid #ccc;
+  padding: 5px 10px;
+  border-radius: 5px;
+}
+
+/* Ensure this button only appears in mobile mode */
+@media (min-width: 768px) {
+  .menu-toggle-button {
+    display: none;
+  }
+}
+
+

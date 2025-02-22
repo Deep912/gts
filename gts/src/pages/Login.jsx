@@ -14,17 +14,24 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post("http://localhost:5000/login", values);
+      // ❗ Replace with your network IP
+      const response = await axios.post(
+        "http://192.168.157.246:5000/login",
+        values
+      );
 
       console.log("🔹 API Response:", response.data);
 
       if (response.data.token) {
+        // Store token & user info in localStorage
         localStorage.setItem("token", response.data.token);
         localStorage.setItem("username", response.data.user.username);
         localStorage.setItem("role", response.data.user.role);
 
+        console.log("✅ Token stored successfully.");
         message.success("Login successful!");
 
+        // Redirect user after login
         setTimeout(() => {
           window.location.href =
             response.data.user.role === "admin"
@@ -35,7 +42,7 @@ const Login = () => {
         message.error("Invalid credentials.");
       }
     } catch (error) {
-      console.error("🔹 Login Error:", error);
+      console.error("❌ Login Error:", error);
       message.error("Incorrect username or password.");
     } finally {
       setLoading(false);

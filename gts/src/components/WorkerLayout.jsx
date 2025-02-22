@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import {
   Layout,
   Menu,
@@ -17,10 +18,10 @@ import {
   LogoutOutlined,
   UserOutlined,
   CheckOutlined,
+  MenuOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
 import "../styles/WorkerLayout.css";
-import { useState, useEffect } from "react";
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -30,12 +31,31 @@ const WorkerLayout = () => {
   const location = useLocation();
   const username = localStorage.getItem("username") || "Worker";
 
-  // State for recent transactions
+  // Sidebar state for mobile
+  const [collapsed, setCollapsed] = useState(window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Handle sidebar toggle
+  const toggleSidebar = () => {
+    setCollapsed(!collapsed);
+  };
+
+  // Resize listener to adjust layout on different screen sizes
   useEffect(() => {
-    // Fetch recent transactions
+    const handleResize = () => {
+      const mobileView = window.innerWidth < 768;
+      setIsMobile(mobileView);
+      if (!mobileView) setCollapsed(false); // Keep sidebar open on desktop
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Fetch recent transactions
+  useEffect(() => {
     axios
       .get("http://localhost:5000/worker/transactions", {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -47,6 +67,13 @@ const WorkerLayout = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  // Handle menu clicks (auto-collapse sidebar on mobile)
+  const handleMenuClick = ({ key }) => {
+    navigate(key);
+    if (isMobile) setCollapsed(true); // Collapse sidebar after clicking on mobile
+  };
+
+  // Logout function
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("username");
@@ -54,19 +81,25 @@ const WorkerLayout = () => {
 
     setTimeout(() => {
       window.location.href = "/";
-    }, 100); // Small delay ensures smooth transition
+    }, 100);
   };
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
       {/* Sidebar */}
-      <Sider collapsible className="worker-sidebar">
+      <Sider
+        collapsible
+        collapsed={collapsed}
+        collapsedWidth={isMobile ? 0 : 80}
+        className="worker-sidebar"
+        breakpoint="md"
+      >
         <div className="worker-logo">🚀 Worker Panel</div>
         <Menu
           theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
-          onClick={({ key }) => navigate(key)}
+          onClick={handleMenuClick} // Auto-collapse on mobile
           items={[
             {
               key: "/worker/dispatch",
@@ -96,6 +129,22 @@ const WorkerLayout = () => {
       <Layout>
         <Header className="worker-header">
           <div className="header-left">
+            {/* Show menu button in mobile mode */}
+            {isMobile && (
+              <Button
+                type="text"
+                icon={<MenuOutlined />}
+                onClick={toggleSidebar}
+                style={{
+                  fontSize: "18px",
+                  marginRight: "10px",
+                  backgroundColor: "white",
+                  border: "1px solid #ccc",
+                  padding: "5px 10px",
+                  borderRadius: "5px",
+                }}
+              />
+            )}
             <UserOutlined /> <span>Welcome, {username}</span>
           </div>
           <Button
